@@ -3,6 +3,7 @@ import glob
 import os
 import shutil
 import sys
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -216,14 +217,22 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
         print("---")
         print(">> Processing libraries")
     broken_libs = []
+    as_split = re.compile('(.*)\s{2,}(?:AS|WITH NAME)\s{2,}(.*?)')
     for lib in libs:
         lib_str_with_resolved_vars = os.path.expandvars(lib)
         target_path = os.path.join(
             target_dir, lib_str_with_resolved_vars.partition("::")[0] + ".html"
         )
         print(f">>> Processing lib: {lib_str_with_resolved_vars}")
+        renamed = as_split.fullmatch(lib_str_with_resolved_vars)
+        if renamed:
+            lib_str_with_resolved_vars = renamed[0]
+            name = renamed[1]
+        else:
+            name = None
         return_code = robot.libdoc.libdoc(
-            lib_str_with_resolved_vars, target_path, quiet=True
+            lib_str_with_resolved_vars_name_split, target_path,
+            name, quiet=True
         )
         if return_code > 0:
             broken_libs.append(lib_str_with_resolved_vars)
@@ -382,6 +391,12 @@ def main():
         for l in total_broken_libs:
             print(f"         - {l}")
 
+    errors = (
+        len(total_broken_files) +
+        len(total_broken_packages) +
+        len(total_broken_libs)
+    )
+
     if os.path.isdir(args.output_dir):
         print("")
         create_toc(
@@ -390,10 +405,14 @@ def main():
             toc_template=args.toc_template,
             homepage_template=args.homepage_template,
         )
-    else:
+    elif errors <= 0:
         print("No docs were created!")
+        errors = 1
 
     print("")
+
+    if errors:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
