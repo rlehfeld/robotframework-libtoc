@@ -226,8 +226,8 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
         print(f">>> Processing lib: {lib_str_with_resolved_vars}")
         renamed = as_split.fullmatch(lib_str_with_resolved_vars)
         if renamed:
-            lib_str_with_resolved_vars = renamed[0]
-            name = renamed[1]
+            lib_str_with_resolved_vars = renamed[1]
+            name = renamed[2]
         else:
             name = None
         return_code = robot.libdoc.libdoc(
