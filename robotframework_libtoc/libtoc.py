@@ -231,7 +231,7 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
         else:
             name = None
         return_code = robot.libdoc.libdoc(
-            lib_str_with_resolved_vars_name_split, target_path,
+            lib_str_with_resolved_vars, target_path,
             name, quiet=True
         )
         if return_code > 0:
