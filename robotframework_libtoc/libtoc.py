@@ -217,7 +217,7 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
         print("---")
         print(">> Processing libraries")
     broken_libs = []
-    as_split = re.compile('(.+)\s{2,}(?:AS|WITH NAME)\s{2,}(.+?)')
+    as_split = re.compile(r'(.+)\s{2,}(?:AS|WITH NAME)\s{2,}(.+?)')
     for lib in libs:
         lib_str_with_resolved_vars = os.path.expandvars(lib)
         print(f">>> Processing lib: {lib_str_with_resolved_vars}")
