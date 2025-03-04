@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 import re
+from itertools import chain
 from datetime import datetime
 from pathlib import Path
 
@@ -54,6 +55,7 @@ def read_config(config_file):
     Parses the content of the `config_file` and returns a dictionary `{"paths":[values], "libs":[values]}`.
 
     The `paths` values are glob patterns, which can be resolved in real paths and used for generating docs using `libdoc`.
+    The `excludes` values are glob patterns, which should be skipped from paths section when generating docs using `libdoc`.
     The `libs`  values are names of Robot Framework libraries with necessary import params - in the way to be also used for docs generation using `libdoc`.
 
     The config file must be formatted like this:
@@ -63,6 +65,9 @@ def read_config(config_file):
     *.resource
     **/my_subfolder/*.py
 
+    [Excludes]
+    **/my_subfolder/ignore.py
+
     [Libs]
     SeleniumLibrary
     SomeLibrary::some_import_param
@@ -70,6 +75,7 @@ def read_config(config_file):
     """
     sections = {
         "paths": {"markers": ["[paths]"], "values": []},
+        "excludes": {"markers": ["[excludes]"], "values": []},
         "packages": {"markers": ["[packages]"], "values": []},
         "libs": {"markers": ["[libs]", "[libraries]"], "values": []},
     }
@@ -92,6 +98,7 @@ def read_config(config_file):
 
     return {
         "paths": sections["paths"]["values"],
+        "excludes": sections["excludes"]["values"],
         "packages": sections["packages"]["values"],
         "libs": sections["libs"]["values"],
     }
@@ -159,6 +166,15 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
     )
     doc_config = read_config(config_file)
 
+    exclude_path_patterns = doc_config["excludes"]
+    exclude = list(
+        chain.from_iterable(
+            glob.glob(
+                os.path.join(resource_dir, pattern), recursive=True
+            ) for pattern in exclude_path_patterns
+        )
+    )
+
     resource_path_patterns = doc_config["paths"]
     if resource_path_patterns:
         print(">> Processing paths")
@@ -168,6 +184,10 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
             os.path.join(resource_dir, path_pattern), recursive=True
         ):
             relative_path = os.path.relpath(real_path, resource_dir)
+            if real_path in exclude:
+                print(f">>> Excluding file: {relative_path}")
+                continue
+
             target_path = os.path.join(
                 target_dir, relative_path.rpartition(".")[0] + ".html"
             )
