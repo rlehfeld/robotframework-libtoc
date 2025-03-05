@@ -11,7 +11,6 @@ include = ["robotframework_libtoc/*template.html"]
 [tool.poetry.dependencies]
 python = ">=3.7"
 robotframework = ">=4"
-importlib-resources = "~5.12"
 
 [tool.poetry.scripts]
 libtoc = "robotframework_libtoc.libtoc:main"

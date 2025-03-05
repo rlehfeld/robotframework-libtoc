@@ -8,7 +8,7 @@ from itertools import chain
 from datetime import datetime
 from pathlib import Path
 
-import importlib_resources
+import importlib.resources
 import robot.libdoc
 
 
@@ -210,27 +210,31 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
     for package_name, paths_patterns in packages.items():
         print(f">> Processing package: {package_name}")
         try:
-            package_anchor = importlib_resources.files(package_name)
+            package_anchor = importlib.resources.files(package_name)
         except ModuleNotFoundError as e:
             print(f"Importing package '{package_name}' failed: {e}")
             broken_packages.append(package_name)
         else:
-            with importlib_resources.as_file(package_anchor) as package_path:
-                for path_pattern in paths_patterns:
-                    package_resource_files = package_path.glob(path_pattern)
-                    for real_path in package_resource_files:
-                        relative_path = Path(package_name) / real_path.relative_to(
-                            package_path
-                        )
-                        target_path = os.path.join(
-                            target_dir, relative_path.with_suffix(".html")
-                        )
-                        print(f">>> Processing file: {relative_path}")
-                        return_code = robot.libdoc.libdoc(
-                            real_path, target_path, quiet=True
-                        )
-                        if return_code > 0:
-                            broken_packages.append(relative_path)
+            try:
+                with importlib.resources.as_file(package_anchor) as package_path:
+                    for path_pattern in paths_patterns:
+                        package_resource_files = package_path.glob(path_pattern)
+                        for real_path in package_resource_files:
+                            relative_path = Path(package_name) / real_path.relative_to(
+                                package_path
+                            )
+                            target_path = os.path.join(
+                                target_dir, relative_path.with_suffix(".html")
+                            )
+                            print(f">>> Processing file: {relative_path}")
+                            return_code = robot.libdoc.libdoc(
+                                real_path, target_path, quiet=True
+                            )
+                            if return_code > 0:
+                                broken_packages.append(relative_path)
+            except FileNotFoundError as e:
+                print(f"Importing package '{package_name}' failed: {e}")
+                broken_packages.append(package_name)
 
     libs = doc_config["libs"]
     if libs:
