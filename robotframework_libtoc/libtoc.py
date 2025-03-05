@@ -5,6 +5,7 @@ import shutil
 import sys
 import re
 from itertools import chain
+from pathlib import Path
 from datetime import datetime
 from pathlib import Path
 
@@ -52,11 +53,12 @@ def homepage(timestamp, template_file=""):
 
 def read_config(config_file):
     """
-    Parses the content of the `config_file` and returns a dictionary `{"paths":[values], "libs":[values]}`.
+    Parses the content of the `config_file` and returns a dictionary `{"paths":[values], "libs":[values], "excludes":[values], "libpaths":[values]}`.
 
     The `paths` values are glob patterns, which can be resolved in real paths and used for generating docs using `libdoc`.
     The `excludes` values are glob patterns, which should be skipped from paths section when generating docs using `libdoc`.
     The `libs`  values are names of Robot Framework libraries with necessary import params - in the way to be also used for docs generation using `libdoc`.
+    The `libpaths` values are glob pattern, with prefix to where a dot-notation import is resolved and used for generating docs using `libdoc`.
 
     The config file must be formatted like this:
     ```
@@ -65,16 +67,21 @@ def read_config(config_file):
     *.resource
     **/my_subfolder/*.py
 
+    [LibPaths]
+    keywords:**/my_subfolder/*.py
+
     [Excludes]
     **/my_subfolder/ignore.py
 
     [Libs]
     SeleniumLibrary
     SomeLibrary::some_import_param
+
     ```
     """
     sections = {
         "paths": {"markers": ["[paths]"], "values": []},
+        "libpaths": {"markers": ["[libpaths]"], "values": []},
         "excludes": {"markers": ["[excludes]"], "values": []},
         "packages": {"markers": ["[packages]"], "values": []},
         "libs": {"markers": ["[libs]", "[libraries]"], "values": []},
@@ -98,6 +105,7 @@ def read_config(config_file):
 
     return {
         "paths": sections["paths"]["values"],
+        "libpaths": sections["libpaths"]["values"],
         "excludes": sections["excludes"]["values"],
         "packages": sections["packages"]["values"],
         "libs": sections["libs"]["values"],
@@ -156,6 +164,9 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
     *.resource
     **/my_subfolder/*.py
 
+    [LibPaths]
+    keywords:**/*.py
+
     [Libs]
     SeleniumLibrary
     SomeLibrary::some_import_param
@@ -195,6 +206,35 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
             return_code = robot.libdoc.libdoc(real_path, target_path, quiet=True)
             if return_code > 0:
                 broken_files.append(relative_path)
+
+    resource_libpath_patterns = doc_config["libpaths"]
+    if resource_libpath_patterns:
+        print(">> Processing libpaths")
+    broken_libfiles = []
+    for libpath_pattern in resource_libpath_patterns:
+        try:
+            prefix, path_pattern = libpath_pattern.split(':', 1)
+        except ValueError:
+            broken_libfiles.append(libpath_pattern)
+            continue
+
+        for real_path in glob.glob(
+            os.path.join(resource_dir, prefix, path_pattern), recursive=True
+        ):
+            resource_prefix = os.path.join(resource_dir, prefix)
+            relative_path = os.path.relpath(real_path, resource_prefix)
+            if real_path in exclude:
+                print(f">>> Excluding file: {relative_path}")
+                continue
+
+            libname = '.'.join(Path(os.path.splitext(relative_path)[0]).parts)
+            target_path = os.path.join(
+                target_dir, libname + ".html"
+            )
+            print(f">>> Processing lib: [{prefix}] {libname}")
+            return_code = robot.libdoc.libdoc(libname, target_path, quiet=True)
+            if return_code > 0:
+                broken_libfiles.append(relative_path)
 
     package_definitions = doc_config["packages"]
     if package_definitions:
@@ -263,7 +303,7 @@ def create_docs_for_dir(resource_dir, output_dir, config_file):
         )
         if return_code > 0:
             broken_libs.append(lib_str_with_resolved_vars)
-    return broken_files, broken_packages, broken_libs
+    return broken_files, broken_packages, broken_libs, broken_libfiles
 
 
 def create_toc(
@@ -345,14 +385,14 @@ def main():
     parser.add_argument(
         "-P",
         "--pythonpath",
-        default="",
+        nargs="*",
+        default=[],
         help="Additional locations where to search for libraries and resources similarly as when running tests",
     )
 
     args = parser.parse_args()
 
-    if args.pythonpath:
-        sys.path.insert(0, args.pythonpath)
+    sys.path = list(chain(args.pythonpath, sys.path))
 
     if os.path.isdir(args.output_dir):
         print(f"Output dir already exists, deleting it: {args.output_dir}")
@@ -360,6 +400,7 @@ def main():
     total_broken_files = []
     total_broken_packages = []
     total_broken_libs = []
+    total_broken_libfiles = []
 
     for resources_dir in args.resources_dirs:
         print("")
@@ -369,6 +410,7 @@ def main():
             current_broken_files = []
             current_broken_packages = []
             current_broken_libs = []
+            current_broken_libfiles = []
             if os.path.isdir(child_element_path):
                 config_file = os.path.join(child_element_path, args.config_file)
                 if os.path.isfile(config_file):
@@ -376,13 +418,19 @@ def main():
                         current_broken_files,
                         current_broken_packages,
                         current_broken_libs,
+                        current_broken_libfiles,
                     ) = create_docs_for_dir(
                         child_element_path,
                         args.output_dir,
                         os.path.abspath(config_file),
                     )
             elif child_element == args.config_file:
-                current_broken_files, current_broken_packages, current_broken_libs = (
+                (
+                    current_broken_files,
+                    current_broken_packages,
+                    current_broken_libs,
+                    current_broken_libfiles,
+                ) = (
                     create_docs_for_dir(
                         resources_dir,
                         args.output_dir,
@@ -393,6 +441,7 @@ def main():
             total_broken_files += current_broken_files
             total_broken_packages += current_broken_packages
             total_broken_libs += current_broken_libs
+            total_broken_libfiles += current_broken_libfiles
 
     if total_broken_files:
         print("")
@@ -418,10 +467,19 @@ def main():
         for l in total_broken_libs:
             print(f"         - {l}")
 
+    if total_broken_libfiles:
+        print("")
+        print(
+            f"---> !!! Errors occurred while generating docs for {len(total_broken_libfiles)} libpath (see details above):"
+        )
+        for l in total_broken_libfiles:
+            print(f"         - {l}")
+
     errors = (
         len(total_broken_files) +
         len(total_broken_packages) +
-        len(total_broken_libs)
+        len(total_broken_libs) +
+        len(total_broken_libfiles)
     )
 
     if os.path.isdir(args.output_dir):
