@@ -129,19 +129,21 @@ def add_files_from_folder(folder, base_dir_path, root=True):
         result_str += """<div class="collapsible_content">
         """
 
-    for item in os.listdir(folder):
-        item_path = os.path.abspath(os.path.join(folder, item))
-        if item.endswith(".html"):
-            name_without_ext = os.path.splitext(item)[0]
-            result_str += """<a class="link_not_selected" href="{}" target="targetFrame">{}</a>
-            """.format(
-                os.path.relpath(item_path, base_dir_path), name_without_ext
-            )
-        else:
-            if os.path.isdir(item_path):
-                result_str += add_files_from_folder(
-                    item_path, base_dir_path, root=False
-                )
+    content = [(f, os.path.abspath(os.path.join(folder, i)) for i in os.listdir(folder))]
+    dirs = [d for _, d in content if os.path.isdir(d)].sort()
+    files = [(i, f) for i, f in content if f.endswith('.html') and os.path.is_file(f, follow_symlinks=True)].sort()
+
+    for d in dirs:
+        result_str += add_files_from_folder(
+            d, base_dir_path, root=False
+        )
+
+    for i, f in files:
+        name_without_ext = os.path.splitext(i)[0]
+        result_str += """<a class="link_not_selected" href="{}" target="targetFrame">{}</a>
+        """.format(
+            os.path.relpath(f, base_dir_path), name_without_ext
+        )
 
     if not root:
         # end of the "collapsible_content"
