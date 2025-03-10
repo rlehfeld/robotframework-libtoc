@@ -129,7 +129,7 @@ def add_files_from_folder(folder, base_dir_path, root=True):
         result_str += """<div class="collapsible_content">
         """
 
-    content = [(f, os.path.abspath(os.path.join(folder, i)) for i in os.listdir(folder))]
+    content = [(i, os.path.abspath(os.path.join(folder, i))) for i in os.listdir(folder)]
     dirs = [d for _, d in content if os.path.isdir(d)].sort()
     files = [(i, f) for i, f in content if f.endswith('.html') and os.path.is_file(f, follow_symlinks=True)].sort()
 
