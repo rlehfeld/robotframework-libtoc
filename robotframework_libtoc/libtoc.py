@@ -130,9 +130,9 @@ def add_files_from_folder(folder, base_dir_path, root=True):
         """
 
     content = [(i, os.path.abspath(os.path.join(folder, i))) for i in os.listdir(folder)]
-    dirs = [d for _, d in content if os.is_dir(d, follow_symlinks=True)]
+    dirs = [d for _, d in content if os.path.isdir(d)]
     dirs.sort(key=lambda x: str(os.path.basename(x)).lower())
-    files = [(i, f) for i, f in content if f.endswith('.html') and os.is_file(f, follow_symlinks=True)]
+    files = [(i, f) for i, f in content if f.endswith('.html') and os.path.isfile(f)]
     files.sort(key=lambda x: str(x[1]).lower())
 
     for d in dirs:
